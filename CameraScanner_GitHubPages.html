@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0E6B4F">
+  <title>Scanner QR - Santri Menabung</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root { --emerald:#0E6B4F; --emerald-dark:#114D3D; --gold:#D4AF37; --ink:#0f172a; --muted:#64748b; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:'Plus Jakarta Sans',sans-serif; background:#f1f5f9; color:var(--ink); }
+    header { background:var(--emerald); color:white; padding:18px 20px; box-shadow:0 4px 14px #0f172a18; }
+    .brand { max-width:720px; margin:auto; display:flex; align-items:center; gap:12px; }
+    .brand-icon { width:44px;height:44px;display:grid;place-items:center;border:1px solid #ffffff40;border-radius:13px;background:#ffffff15;color:var(--gold);font-size:21px; }
+    h1 { margin:0;font-size:17px;line-height:1.35;font-weight:800;letter-spacing:.2px; }
+    header p { margin:4px 0 0;color:#d1fae5;font-size:12px; }
+    main { width:min(100% - 24px,620px);margin:22px auto 36px; }
+    .card { background:white;border:1px solid #e2e8f0;border-radius:20px;padding:20px;box-shadow:0 5px 18px #0f172a0c; }
+    .intro { margin-bottom:16px; }
+    .intro h2 { margin:0 0 7px;font-size:18px; }
+    .intro p { margin:0;color:var(--muted);font-size:13px;line-height:1.65; }
+    #reader { width:100%;overflow:hidden;border-radius:14px;background:#0f172a;min-height:260px; }
+    #reader video { border-radius:10px; }
+    .status { margin:14px 0 0;padding:12px 14px;border-radius:12px;background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;font-size:13px;line-height:1.6;overflow-wrap:anywhere; }
+    .status.error { background:#fff7ed;border-color:#fed7aa;color:#9a3412; }
+    .actions { display:flex;gap:10px;margin-top:15px; }
+    button { flex:1;border:0;border-radius:12px;padding:13px 14px;font:700 13px 'Plus Jakarta Sans',sans-serif;cursor:pointer; }
+    button:disabled { opacity:.55;cursor:not-allowed; }
+    .primary { color:white;background:var(--emerald); }
+    .primary:hover { background:var(--emerald-dark); }
+    .secondary { color:#334155;background:#e2e8f0; }
+    .manual { margin-top:20px;padding-top:18px;border-top:1px solid #e2e8f0; }
+    label { display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:8px; }
+    .manual-row { display:flex;gap:8px; }
+    input { min-width:0;flex:1;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font:500 13px 'Plus Jakarta Sans',sans-serif; }
+    .manual-row button { flex:0 0 auto; }
+    .hint { margin:15px 2px 0;color:#64748b;font-size:11px;line-height:1.65;text-align:center; }
+    @media(max-width:480px) { .card{padding:15px}.actions{flex-direction:column} .manual-row{flex-direction:column}.manual-row button{width:100%} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon"><i class="fa-solid fa-qrcode"></i></div>
+      <div><h1>SANTRI MENABUNG</h1><p>Scanner QR Kartu Tabungan · Dayah Babul Maghfirah</p></div>
+    </div>
+  </header>
+  <main>
+    <section class="card">
+      <div class="intro">
+        <h2><i class="fa-solid fa-camera" style="color:var(--emerald)"></i> Pindai QR Santri</h2>
+        <p>Arahkan kamera ke QR Code pada kartu tabungan. Setelah QR terbaca, data rekening akan dikirim kembali ke aplikasi Santri Menabung.</p>
+      </div>
+      <div id="reader"></div>
+      <div id="status" class="status" role="status" aria-live="polite">Tekan “Mulai Kamera”, lalu izinkan akses kamera pada browser.</div>
+      <div class="actions">
+        <button id="btnStart" class="primary" onclick="startScanner()"><i class="fa-solid fa-camera"></i> Mulai Kamera</button>
+        <button id="btnStop" class="secondary" onclick="stopScanner()"><i class="fa-solid fa-stop"></i> Stop Kamera</button>
+      </div>
+      <div class="manual">
+        <label for="manualCode">Atau masukkan kode rekening / NIS secara manual</label>
+        <div class="manual-row">
+          <input id="manualCode" type="text" autocomplete="off" placeholder="Contoh: REK-202601">
+          <button class="primary" onclick="sendManualCode()">Kirim Kode</button>
+        </div>
+      </div>
+    </section>
+    <p class="hint">Akses kamera hanya digunakan untuk membaca QR Code. Halaman ini tidak menyimpan foto atau video.</p>
+  </main>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const candidateParentOrigin = params.get('parentOrigin') || '';
+  let PARENT_ORIGIN = '';
+  try {
+    const parentUrl = new URL(candidateParentOrigin);
+    const host = parentUrl.hostname;
+    // Apps Script deployments may use hosts such as n-...-script.googleusercontent.com.
+    // Accept these Google Apps Script hosts as well as the standard hosts.
+    const permittedHost = host === 'script.google.com' ||
+      host === 'script.googleusercontent.com' ||
+      host.endsWith('.script.googleusercontent.com') ||
+      /^[a-z0-9-]+-script\.googleusercontent\.com$/i.test(host);
+    if (parentUrl.protocol === 'https:' && permittedHost) PARENT_ORIGIN = parentUrl.origin;
+  } catch (_) {}
+
+  let qrScanner = null;
+  let scanning = false;
+  let starting = false;
+  let resultSent = false;
+
+  const statusEl = document.getElementById('status');
+  const startButton = document.getElementById('btnStart');
+  const stopButton = document.getElementById('btnStop');
+
+  function setStatus(message, isError = false) {
+    statusEl.textContent = message;
+    statusEl.classList.toggle('error', isError);
+  }
+
+  async function startScanner() {
+    if (starting || scanning || resultSent) return;
+    if (!window.isSecureContext) {
+      setStatus('Kamera memerlukan HTTPS. Buka halaman scanner melalui URL HTTPS.', true);
+      return;
+    }
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      setStatus('Browser ini tidak menyediakan akses kamera. Gunakan Chrome atau Safari versi terbaru.', true);
+      return;
+    }
+    if (typeof Html5Qrcode === 'undefined') {
+      setStatus('Library scanner belum termuat. Periksa koneksi internet lalu muat ulang halaman.', true);
+      return;
+    }
+
+    starting = true;
+    startButton.disabled = true;
+    setStatus('Meminta akses kamera…');
+    const config = {
+      fps: 10,
+      qrbox: (viewWidth, viewHeight) => {
+        const size = Math.max(160, Math.floor(Math.min(viewWidth, viewHeight) * 0.72));
+        return { width: Math.min(size, viewWidth), height: Math.min(size, viewHeight) };
+      }
+    };
+
+    try {
+      qrScanner = new Html5Qrcode('reader');
+      const onSuccess = (decodedText) => {
+        if (resultSent) return;
+        resultSent = true;
+        const code = String(decodedText || '').trim();
+        if (!code) { resultSent = false; return; }
+        setStatus('QR berhasil dibaca. Mengirim kode ke aplikasi…');
+        stopScanner().finally(() => sendResult(code));
+      };
+
+      try {
+        await qrScanner.start({ facingMode: 'environment' }, config, onSuccess, () => {});
+      } catch (environmentError) {
+        // Fallback for laptops or devices that do not expose a rear-facing camera.
+        const cameras = await Html5Qrcode.getCameras();
+        if (!cameras || cameras.length === 0) throw environmentError;
+        const preferred = cameras.find(c => /back|rear|belakang|environment|main/i.test(c.label)) || cameras[0];
+        await qrScanner.start(preferred.id, config, onSuccess, () => {});
+      }
+      scanning = true;
+      setStatus('Kamera aktif. Arahkan QR Code ke dalam bingkai sampai terbaca.');
+    } catch (error) {
+      const name = error && error.name ? error.name : '';
+      let message = 'Kamera tidak berhasil dibuka.';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || /permission|denied|not allowed|permissions policy/i.test((error && error.message) || '')) {
+        message = 'Akses kamera ditolak atau dibatasi browser. Klik ikon kamera/gembok pada alamat halaman ini, ubah izin Kamera menjadi Izinkan, lalu muat ulang halaman.';
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        message = 'Kamera tidak ditemukan. Periksa apakah perangkat memiliki kamera yang terhubung.';
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        message = 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi kamera lain lalu coba kembali.';
+      } else if (error && error.message) {
+        message += ' Detail: ' + error.message;
+      }
+      setStatus(message, true);
+      console.error('Scanner error:', error);
+      if (qrScanner) {
+        try { if (qrScanner.isScanning) await qrScanner.stop(); } catch (_) {}
+        try { await qrScanner.clear(); } catch (_) {}
+      }
+      qrScanner = null;
+      scanning = false;
+    } finally {
+      starting = false;
+      startButton.disabled = false;
+    }
+  }
+
+  async function stopScanner() {
+    const scanner = qrScanner;
+    qrScanner = null;
+    if (!scanner) { scanning = false; return; }
+    try {
+      if (scanner.isScanning || scanning) await scanner.stop();
+    } catch (_) {}
+    try { await scanner.clear(); } catch (_) {}
+    scanning = false;
+  }
+
+  function sendResult(code) {
+    if (!PARENT_ORIGIN) {
+      setStatus('QR terbaca: ' + code + '. Namun alamat aplikasi induk tidak valid sehingga kode tidak dikirim otomatis. Tutup halaman ini dan buka scanner dari aplikasi Santri Menabung.', true);
+      return;
+    }
+    if (!window.opener || window.opener.closed) {
+      setStatus('QR terbaca: ' + code + '. Jendela aplikasi induk tidak ditemukan. Buka scanner dari tombol Buka Kamera di aplikasi Santri Menabung.', true);
+      return;
+    }
+    try {
+      window.opener.postMessage({ type: 'SANTRI_QR_SCAN', text: code }, PARENT_ORIGIN);
+      setStatus('Kode berhasil dikirim ke aplikasi. Halaman scanner akan ditutup…');
+      setTimeout(() => window.close(), 900);
+    } catch (error) {
+      setStatus('QR terbaca tetapi gagal dikirim ke aplikasi. ' + (error.message || ''), true);
+    }
+  }
+
+  function sendManualCode() {
+    const value = document.getElementById('manualCode').value.trim();
+    if (!value) { setStatus('Masukkan kode rekening atau NIS terlebih dahulu.', true); return; }
+    resultSent = true;
+    stopScanner().finally(() => sendResult(value));
+  }
+
+  window.addEventListener('beforeunload', () => { stopScanner(); });
+  if (!PARENT_ORIGIN) {
+    setStatus('Peringatan: halaman ini sebaiknya dibuka dari tombol Buka Kamera pada aplikasi Santri Menabung, agar kode QR dapat dikirim kembali dengan aman.', true);
+  }
+</script>
+</body>
+</html>
